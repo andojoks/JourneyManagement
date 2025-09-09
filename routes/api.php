@@ -5,6 +5,8 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\TripController;
 use App\Http\Controllers\Api\BookingController;
+use App\Http\Controllers\Api\RouteController;
+use App\Http\Controllers\Api\BookingQueueController;
 
 /*
 |--------------------------------------------------------------------------
@@ -39,5 +41,23 @@ Route::group(['prefix' => 'v1'], function () {
 
         // Booking routes
         Route::apiResource('bookings', BookingController::class);
+
+        // Route optimization routes
+        Route::prefix('routes')->group(function () {
+            Route::get('search', [RouteController::class, 'searchWaypoints']);
+            Route::get('find', [RouteController::class, 'findRoute']);
+            Route::get('cities', [RouteController::class, 'getRouteBetweenCities']);
+            Route::post('pricing', [RouteController::class, 'calculatePricing']);
+            Route::post('pricing/bulk', [RouteController::class, 'updateBulkPricing']);
+        });
+
+        // Booking queue routes
+        Route::prefix('queue')->group(function () {
+            Route::post('add', [BookingQueueController::class, 'addToQueue']);
+            Route::post('process', [BookingQueueController::class, 'processQueue']);
+            Route::get('status', [BookingQueueController::class, 'getQueueStatus']);
+            Route::get('positions', [BookingQueueController::class, 'getUserQueuePositions']);
+            Route::delete('cancel', [BookingQueueController::class, 'cancelQueueItem']);
+        });
     });
 });

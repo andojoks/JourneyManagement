@@ -25,6 +25,11 @@ class Trip extends Model
         'trip_type',
         'total_seats',
         'available_seats',
+        'base_price',
+        'surge_multiplier',
+        'final_price',
+        'route_waypoints',
+        'priority_score',
     ];
 
     /**
@@ -38,6 +43,11 @@ class Trip extends Model
         'distance' => 'float',
         'total_seats' => 'integer',
         'available_seats' => 'integer',
+        'base_price' => 'decimal:2',
+        'surge_multiplier' => 'decimal:2',
+        'final_price' => 'decimal:2',
+        'route_waypoints' => 'array',
+        'priority_score' => 'integer',
     ];
 
     /**
