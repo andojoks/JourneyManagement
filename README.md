@@ -1,6 +1,6 @@
 # 🚀 Journey Manager API
 
-A comprehensive REST API built with Laravel 12 for managing users and trips with JWT authentication, featuring full CRUD operations, pagination, and date filtering capabilities.
+A comprehensive REST API built with Laravel 12 for managing users, trips, and carpooling bookings with JWT authentication, featuring full CRUD operations, pagination, date filtering, and seat reservation capabilities.
 
 ## 📋 Table of Contents
 
@@ -20,13 +20,16 @@ A comprehensive REST API built with Laravel 12 for managing users and trips with
 
 ### Core Functionality
 - **User Management**: Registration, authentication, and profile management
-- **Trip Management**: Complete CRUD operations for trip tracking
+- **Trip Management**: Complete CRUD operations for trip tracking with seat capacity
+- **Carpooling Bookings**: Seat reservation system for available trips
 - **JWT Authentication**: Secure token-based authentication system
-- **Authorization**: Users can only access and modify their own trips
+- **Smart Authorization**: Users can view all trips but only modify their own; booking access control
 
 ### Advanced Features
 - **Pagination**: Built-in pagination for efficient data retrieval
-- **Date Filtering**: Search trips by date range
+- **Date Filtering**: Search trips by date range and location
+- **Seat Management**: Track total and available seats for each trip
+- **Booking System**: Reserve and cancel seats with automatic seat updates
 - **Input Validation**: Comprehensive validation for all endpoints
 - **Error Handling**: Detailed error responses with proper HTTP status codes
 - **API Documentation**: Complete Swagger/OpenAPI 3.0 documentation
@@ -139,11 +142,18 @@ The complete API documentation is available in Swagger/OpenAPI 3.0 format:
 - `POST /api/v1/auth/refresh` - Refresh JWT token
 
 #### Trip Management Endpoints
-- `GET /api/v1/trips` - List user's trips (with pagination & date filtering)
-- `POST /api/v1/trips` - Create a new trip
-- `GET /api/v1/trips/{id}` - Get specific trip
-- `PUT /api/v1/trips/{id}` - Update trip
+- `GET /api/v1/trips` - List all trips (with pagination & filtering)
+- `POST /api/v1/trips` - Create a new trip with seat capacity
+- `GET /api/v1/trips/{id}` - Get specific trip with conditional booking visibility
+- `PUT /api/v1/trips/{id}` - Update trip (including seat capacity)
 - `DELETE /api/v1/trips/{id}` - Delete trip
+- `GET /api/v1/trips/available` - List trips with available seats
+
+#### Booking Management Endpoints
+- `GET /api/v1/bookings` - List user's bookings
+- `POST /api/v1/bookings` - Create a new booking (reserve seats)
+- `GET /api/v1/bookings/{id}` - Get specific booking
+- `DELETE /api/v1/bookings/{id}` - Cancel booking (restore seats)
 
 ### Base URL
 ```
@@ -177,7 +187,7 @@ curl -X POST http://localhost:8000/api/auth/login \
   }'
 ```
 
-### 3. Create a Trip
+### 3. Create a Trip with Seat Capacity
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/trips \
@@ -189,18 +199,45 @@ curl -X POST http://localhost:8000/api/v1/trips \
     "start_time": "2024-01-15T08:00:00Z",
     "end_time": "2024-01-15T10:00:00Z",
     "distance": 460,
-    "trip_type": "business"
+    "trip_type": "business",
+    "total_seats": 4
   }'
 ```
 
-### 4. List Trips with Pagination and Date Filtering
+### 4. List Available Trips for Booking
 
 ```bash
-curl -X GET "http://localhost:8000/api/v1/trips?page=1&limit=10&start_date=2024-01-01&end_date=2024-01-31" \
+curl -X GET "http://localhost:8000/api/v1/trips/available?page=1&limit=10&origin=Paris&destination=Lyon" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
-### 5. Update a Trip
+### 5. Create a Booking (Reserve Seats)
+
+```bash
+curl -X POST http://localhost:8000/api/v1/bookings \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "trip_id": 1,
+    "seats_reserved": 2
+  }'
+```
+
+### 6. List User's Bookings
+
+```bash
+curl -X GET "http://localhost:8000/api/v1/bookings?page=1&limit=10" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+### 7. Cancel a Booking
+
+```bash
+curl -X DELETE http://localhost:8000/api/v1/bookings/1 \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+### 8. Update Trip with New Seat Capacity
 
 ```bash
 curl -X PUT http://localhost:8000/api/v1/trips/1 \
@@ -213,8 +250,56 @@ curl -X PUT http://localhost:8000/api/v1/trips/1 \
     "end_time": "2024-01-15T12:00:00Z",
     "distance": 770,
     "trip_type": "business",
-    "status": "completed"
+    "total_seats": 6,
+    "status": "in-progress"
   }'
+```
+
+## 🚗 Carpooling Booking System
+
+### Business Rules
+
+The booking system implements the following business logic:
+
+#### Trip Visibility
+- **All Users**: Can view all trips (both their own and others')
+- **Trip Creators**: Can see all bookings for their trips
+- **Other Users**: Can only see their own booking for a specific trip
+
+#### Booking Rules
+- **Self-Booking Prevention**: Users cannot book seats on their own trips
+- **Seat Availability**: Users cannot book more seats than available
+- **No Double-Booking**: Users cannot book the same trip multiple times
+- **Booking Access**: Users can view/cancel bookings they made OR trips they created
+
+#### Seat Management
+- **Automatic Updates**: Available seats are automatically updated when bookings are created/cancelled
+- **Capacity Validation**: Trip creators cannot reduce total seats below currently reserved seats
+- **Real-time Tracking**: Available seats reflect current booking status
+
+### Database Schema
+
+#### Trips Table (Enhanced)
+```sql
+- id (Primary Key)
+- user_id (Foreign Key to users)
+- origin, destination, start_time, end_time
+- distance, trip_type, status
+- total_seats (NEW: Maximum seats available)
+- available_seats (NEW: Currently available seats)
+- created_at, updated_at
+```
+
+#### Bookings Table (NEW)
+```sql
+- id (Primary Key)
+- user_id (Foreign Key to users)
+- trip_id (Foreign Key to trips)
+- seats_reserved (Number of seats booked)
+- booking_time (When booking was made)
+- status (confirmed/cancelled)
+- created_at, updated_at
+- UNIQUE constraint on (user_id, trip_id)
 ```
 
 ## 🔒 Security
@@ -226,8 +311,10 @@ curl -X PUT http://localhost:8000/api/v1/trips/1 \
 - **Token Refresh**: Automatic token refresh mechanism
 
 ### Authorization
-- **User Ownership**: Users can only access their own trips
-- **Route Protection**: JWT middleware protects all trip endpoints
+- **Trip Access**: Users can view all trips but only modify their own
+- **Booking Access**: Users can view/cancel bookings they made or trips they created
+- **Business Rules**: Users cannot book their own trips or exceed available seats
+- **Route Protection**: JWT middleware protects all endpoints
 - **Input Validation**: Comprehensive validation on all inputs
 - **SQL Injection Protection**: Laravel's Eloquent ORM protection
 
@@ -266,22 +353,39 @@ journey-manager/
 │   │   ├── Controllers/
 │   │   │   └── Api/
 │   │   │       ├── AuthController.php
-│   │   │       └── TripController.php
+│   │   │       ├── TripController.php
+│   │   │       └── BookingController.php
 │   │   └── Middleware/
 │   │       └── JWTMiddleware.php
-│   └── Models/
-│       ├── User.php
-│       └── Trip.php
+│   ├── Models/
+│   │   ├── User.php
+│   │   ├── Trip.php
+│   │   └── Booking.php
+│   └── Providers/
+│       └── AppServiceProvider.php
 ├── config/
 │   ├── auth.php
 │   └── jwt.php
 ├── database/
 │   ├── migrations/
+│   │   ├── create_users_table.php
+│   │   ├── create_trips_table.php
+│   │   ├── add_seat_capacity_to_trips_table.php
+│   │   └── create_bookings_table.php
+│   ├── factories/
+│   │   ├── UserFactory.php
+│   │   ├── TripFactory.php
+│   │   └── BookingFactory.php
 │   └── database.sqlite
 ├── public/
 │   └── swagger.json
 ├── routes/
 │   └── api.php
+├── tests/
+│   └── Feature/
+│       ├── AuthTest.php
+│       ├── TripTest.php
+│       └── BookingTest.php
 └── README.md
 ```
 
@@ -346,12 +450,14 @@ For support and questions:
 
 - [ ] Email verification for user registration
 - [ ] Password reset functionality
-- [ ] Trip sharing between users
 - [ ] Real-time trip tracking
 - [ ] Mobile app integration
 - [ ] Advanced analytics and reporting
 - [ ] Multi-language support
 - [ ] API rate limiting improvements
+- [ ] Push notifications for booking updates
+- [ ] Trip rating and review system
+- [ ] Payment integration for bookings
 
 ---
 

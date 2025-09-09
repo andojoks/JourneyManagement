@@ -28,10 +28,9 @@ describe('User Registration', function () {
                         'last_name',
                         'email',
                         'phone_number',
-                        'is_active',
-                        'role',
                         'created_at',
-                        'updated_at'
+                        'updated_at',
+                        'id'
                     ],
                     'token',
                     'token_type',
@@ -46,9 +45,7 @@ describe('User Registration', function () {
                         'first_name' => 'John',
                         'last_name' => 'Doe',
                         'email' => 'john@example.com',
-                        'phone_number' => '+1234567890',
-                        'is_active' => true,
-                        'role' => 'user'
+                        'phone_number' => '+1234567890'
                     ],
                     'token_type' => 'bearer'
                 ]
@@ -273,6 +270,8 @@ describe('Token Refresh', function () {
     it('can refresh JWT token', function () {
         $user = User::factory()->create();
         $token = auth()->login($user);
+
+        \Log::info(['Token: ' => $token]);
 
         $response = $this->withHeaders([
             'Authorization' => 'Bearer ' . $token

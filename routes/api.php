@@ -4,6 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\TripController;
+use App\Http\Controllers\Api\BookingController;
 
 /*
 |--------------------------------------------------------------------------
@@ -34,5 +35,9 @@ Route::group(['prefix' => 'v1'], function () {
 
         // Trip routes
         Route::apiResource('trips', TripController::class);
+        Route::get('trips/available', [TripController::class, 'available']);
+
+        // Booking routes
+        Route::apiResource('bookings', BookingController::class);
     });
 });

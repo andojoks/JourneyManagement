@@ -23,6 +23,8 @@ class Trip extends Model
         'status',
         'distance',
         'trip_type',
+        'total_seats',
+        'available_seats',
     ];
 
     /**
@@ -34,6 +36,8 @@ class Trip extends Model
         'start_time' => 'datetime',
         'end_time' => 'datetime',
         'distance' => 'float',
+        'total_seats' => 'integer',
+        'available_seats' => 'integer',
     ];
 
     /**
@@ -42,6 +46,22 @@ class Trip extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Get the bookings for the trip.
+     */
+    public function bookings()
+    {
+        return $this->hasMany(Booking::class);
+    }
+
+    /**
+     * Get the confirmed bookings for the trip.
+     */
+    public function confirmedBookings()
+    {
+        return $this->hasMany(Booking::class)->confirmed();
     }
 
     /**
@@ -58,5 +78,29 @@ class Trip extends Model
     public function scopeByDateRange($query, $startDate, $endDate)
     {
         return $query->whereBetween('start_time', [$startDate, $endDate]);
+    }
+
+    /**
+     * Scope a query to only include trips with available seats.
+     */
+    public function scopeWithAvailableSeats($query)
+    {
+        return $query->where('available_seats', '>', 0);
+    }
+
+    /**
+     * Check if the trip has enough available seats.
+     */
+    public function hasAvailableSeats($seatsRequested = 1)
+    {
+        return $this->available_seats >= $seatsRequested;
+    }
+
+    /**
+     * Get the total number of seats reserved for this trip.
+     */
+    public function getTotalReservedSeats()
+    {
+        return $this->confirmedBookings()->sum('seats_reserved');
     }
 }
