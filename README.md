@@ -1,61 +1,358 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# 🚀 Journey Manager API
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A comprehensive REST API built with Laravel 12 for managing users and trips with JWT authentication, featuring full CRUD operations, pagination, and date filtering capabilities.
 
-## About Laravel
+## 📋 Table of Contents
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- [Features](#-features)
+- [Requirements](#-requirements)
+- [Installation](#-installation)
+- [Configuration](#-configuration)
+- [API Documentation](#-api-documentation)
+- [Usage Examples](#-usage-examples)
+- [Database Schema](#-database-schema)
+- [Security](#-security)
+- [Testing](#-testing)
+- [Contributing](#-contributing)
+- [License](#-license)
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## ✨ Features
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+### Core Functionality
+- **User Management**: Registration, authentication, and profile management
+- **Trip Management**: Complete CRUD operations for trip tracking
+- **JWT Authentication**: Secure token-based authentication system
+- **Authorization**: Users can only access and modify their own trips
 
-## Learning Laravel
+### Advanced Features
+- **Pagination**: Built-in pagination for efficient data retrieval
+- **Date Filtering**: Search trips by date range
+- **Input Validation**: Comprehensive validation for all endpoints
+- **Error Handling**: Detailed error responses with proper HTTP status codes
+- **API Documentation**: Complete Swagger/OpenAPI 3.0 documentation
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+### Technical Features
+- **Laravel 12**: Built on the latest Laravel framework
+- **SQLite Database**: Lightweight database for development
+- **JWT Tokens**: Secure authentication with token refresh
+- **RESTful Design**: Following REST API best practices
+- **Middleware Protection**: Custom JWT middleware for route protection
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+## 🔧 Requirements
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+- **PHP**: 8.2 or higher
+- **Composer**: Latest version
+- **Laravel**: 12.x
+- **Extensions**: BCMath, Ctype, cURL, DOM, Fileinfo, JSON, Mbstring, OpenSSL, PCRE, PDO, Tokenizer, XML
 
-## Laravel Sponsors
+## 🚀 Installation
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+### 1. Clone the Repository
 
-### Premium Partners
+```bash
+git clone https://github.com/andojoks/JourneyManagement.git
+cd journey-manager
+```
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+### 2. Install Dependencies
 
-## Contributing
+```bash
+composer install
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+### 3. Environment Setup
 
-## Code of Conduct
+```bash
+# Copy environment file
+cp .env.example .env
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+# Generate application key
+php artisan key:generate
 
-## Security Vulnerabilities
+# Generate JWT secret
+php artisan jwt:secret
+```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+### 4. Database Setup
 
-## License
+```bash
+# Run migrations
+php artisan migrate
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+# (Optional) Seed database with sample data
+php artisan db:seed
+```
+
+### 5. Start the Development Server
+
+```bash
+php artisan serve
+```
+
+The API will be available at `http://localhost:8000/api/v1`
+
+## ⚙️ Configuration
+
+### Environment Variables
+
+Update your `.env` file with the following JWT configuration:
+
+```env
+# JWT Configuration
+JWT_SECRET=your-jwt-secret-key-here
+JWT_TTL=60
+JWT_REFRESH_TTL=20160
+JWT_ALGO=HS256
+JWT_LEEWAY=0
+JWT_BLACKLIST_ENABLED=true
+JWT_BLACKLIST_GRACE_PERIOD=0
+
+# Database Configuration [Developement] (SQLite)
+DB_CONNECTION=sqlite
+DB_DATABASE=database/database.sqlite
+```
+
+### JWT Configuration
+
+The JWT package is configured with the following defaults:
+- **Token TTL**: 60 minutes
+- **Refresh TTL**: 2 weeks
+- **Algorithm**: HS256
+- **Blacklist**: Enabled for security
+
+## 📚 API Documentation
+
+### Swagger Documentation
+
+The complete API documentation is available in Swagger/OpenAPI 3.0 format:
+
+- **Swagger JSON**: `http://localhost:8000/swagger.json`
+- **Interactive Documentation**: `http://localhost:8000/api/documentation`
+
+### API Endpoints
+
+#### Authentication Endpoints
+- `POST /api/v1/auth/register` - Register a new user
+- `POST /api/v1/auth/login` - Login and get JWT token
+- `GET /api/v1/auth/me` - Get current user profile
+- `POST /api/v1/auth/logout` - Logout (invalidate token)
+- `POST /api/v1/auth/refresh` - Refresh JWT token
+
+#### Trip Management Endpoints
+- `GET /api/v1/trips` - List user's trips (with pagination & date filtering)
+- `POST /api/v1/trips` - Create a new trip
+- `GET /api/v1/trips/{id}` - Get specific trip
+- `PUT /api/v1/trips/{id}` - Update trip
+- `DELETE /api/v1/trips/{id}` - Delete trip
+
+### Base URL
+```
+http://localhost:8000/api/v1
+```
+
+## 💡 Usage Examples
+
+### 1. User Registration
+
+```bash
+curl -X POST http://localhost:8000/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "first_name": "John",
+    "last_name": "Doe",
+    "email": "john@example.com",
+    "password": "password123",
+    "phone_number": "+1234567890"
+  }'
+```
+
+### 2. User Login
+
+```bash
+curl -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "john@example.com",
+    "password": "password123"
+  }'
+```
+
+### 3. Create a Trip
+
+```bash
+curl -X POST http://localhost:8000/api/v1/trips \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "origin": "Paris",
+    "destination": "Lyon",
+    "start_time": "2024-01-15T08:00:00Z",
+    "end_time": "2024-01-15T10:00:00Z",
+    "distance": 460,
+    "trip_type": "business"
+  }'
+```
+
+### 4. List Trips with Pagination and Date Filtering
+
+```bash
+curl -X GET "http://localhost:8000/api/v1/trips?page=1&limit=10&start_date=2024-01-01&end_date=2024-01-31" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+### 5. Update a Trip
+
+```bash
+curl -X PUT http://localhost:8000/api/v1/trips/1 \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "origin": "Paris",
+    "destination": "Marseille",
+    "start_time": "2024-01-15T08:00:00Z",
+    "end_time": "2024-01-15T12:00:00Z",
+    "distance": 770,
+    "trip_type": "business",
+    "status": "completed"
+  }'
+```
+
+## 🔒 Security
+
+### Authentication
+- **JWT Tokens**: Secure token-based authentication
+- **Password Hashing**: Laravel's built-in password hashing
+- **Token Expiration**: Configurable token lifetime
+- **Token Refresh**: Automatic token refresh mechanism
+
+### Authorization
+- **User Ownership**: Users can only access their own trips
+- **Route Protection**: JWT middleware protects all trip endpoints
+- **Input Validation**: Comprehensive validation on all inputs
+- **SQL Injection Protection**: Laravel's Eloquent ORM protection
+
+### Security Headers
+- **CORS**: Configurable Cross-Origin Resource Sharing
+- **Rate Limiting**: Built-in rate limiting for API endpoints
+- **CSRF Protection**: Laravel's CSRF protection for web routes
+
+## 🧪 Testing
+
+### Run Tests
+
+```bash
+# Run all tests
+php artisan test
+
+# Run specific test suite
+php artisan test --testsuite=Feature
+php artisan test --testsuite=Unit
+
+# Run with coverage
+php artisan test --coverage
+```
+
+### Test Structure
+- **Feature Tests**: API endpoint testing
+- **Unit Tests**: Individual component testing
+- **Pest Framework**: Modern testing framework
+
+## 📁 Project Structure
+
+```
+journey-manager/
+├── app/
+│   ├── Http/
+│   │   ├── Controllers/
+│   │   │   └── Api/
+│   │   │       ├── AuthController.php
+│   │   │       └── TripController.php
+│   │   └── Middleware/
+│   │       └── JWTMiddleware.php
+│   └── Models/
+│       ├── User.php
+│       └── Trip.php
+├── config/
+│   ├── auth.php
+│   └── jwt.php
+├── database/
+│   ├── migrations/
+│   └── database.sqlite
+├── public/
+│   └── swagger.json
+├── routes/
+│   └── api.php
+└── README.md
+```
+
+## 🚀 Deployment
+
+### Production Setup
+
+1. **Environment Configuration**
+   ```bash
+   # Set production environment
+   APP_ENV=production
+   APP_DEBUG=false
+   
+   # Configure database
+   DB_CONNECTION=mysql
+   DB_HOST=your-db-host
+   DB_DATABASE=your-db-name
+   DB_USERNAME=your-db-user
+   DB_PASSWORD=your-db-password
+   ```
+
+2. **Optimize Application**
+   ```bash
+   php artisan config:cache
+   php artisan route:cache
+   php artisan view:cache
+   ```
+
+3. **Set Permissions**
+   ```bash
+   chmod -R 755 storage bootstrap/cache
+   ```
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+### Development Guidelines
+
+- Follow PSR-12 coding standards
+- Write tests for new features
+- Update documentation for API changes
+- Use meaningful commit messages
+
+## 📄 License
+
+This project is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+
+## 🆘 Support
+
+For support and questions:
+
+- **Email**: support@journeymanager.com
+- **Documentation**: Check the Swagger documentation at `/swagger.json`
+- **Issues**: Create an issue in the repository
+
+## 🎯 Roadmap
+
+- [ ] Email verification for user registration
+- [ ] Password reset functionality
+- [ ] Trip sharing between users
+- [ ] Real-time trip tracking
+- [ ] Mobile app integration
+- [ ] Advanced analytics and reporting
+- [ ] Multi-language support
+- [ ] API rate limiting improvements
+
+---
+
+**Built with ❤️ using Laravel 12**

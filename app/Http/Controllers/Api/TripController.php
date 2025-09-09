@@ -24,7 +24,20 @@ class TripController extends Controller
         if ($request->has('start_date') && $request->has('end_date')) {
             $startDate = Carbon::parse($request->start_date)->startOfDay();
             $endDate = Carbon::parse($request->end_date)->endOfDay();
-            $query->byDateRange($startDate, $endDate);
+            if ($endDate->lt($startDate)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'End date must be after start date.'
+                ], 422);
+            }
+            $query->where('start_time', '>=', $startDate)
+                  ->where('end_time', '<=', $endDate);
+        } elseif ($request->has('start_date')) {
+            $startDate = Carbon::parse($request->start_date)->startOfDay();
+            $query->where('start_time', '>=', $startDate);
+        } elseif ($request->has('end_date')) {
+            $endDate = Carbon::parse($request->end_date)->endOfDay();
+            $query->where('end_time', '<=', $endDate);
         }
 
         // Pagination
