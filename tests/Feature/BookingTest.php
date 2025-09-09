@@ -733,3 +733,99 @@ test('user can filter bookings by non-existent trip', function () {
     $bookingsData = $response->json('data.data');
     expect($bookingsData)->toHaveCount(0);
 });
+
+test('booking fails when trip is full', function () {
+    // Create a trip with only 1 seat available
+    $trip = \App\Models\Trip::factory()->create([
+        'user_id' => $this->user1->id,
+        'total_seats' => 2,
+        'available_seats' => 1,
+    ]);
+
+    // User2 books 1 seat (should succeed)
+    $response = $this->withHeaders($this->user2Headers)
+        ->postJson('/api/v1/bookings', [
+            'trip_id' => $trip->id,
+            'seats_reserved' => 1,
+        ]);
+
+    $response->assertStatus(201);
+
+    // User3 tries to book 1 seat (should fail - trip is now full)
+    $response = $this->withHeaders($this->user3Headers)
+        ->postJson('/api/v1/bookings', [
+            'trip_id' => $trip->id,
+            'seats_reserved' => 1,
+        ]);
+
+    $response->assertStatus(422)
+        ->assertJson([
+            'success' => false,
+            'message' => 'Trip is full. Not enough seats available.',
+        ]);
+});
+
+test('booking fails when requesting more seats than available', function () {
+    // Create a trip with 2 seats available
+    $trip = \App\Models\Trip::factory()->create([
+        'user_id' => $this->user1->id,
+        'total_seats' => 4,
+        'available_seats' => 2,
+    ]);
+
+    // User2 tries to book 3 seats (should fail - only 2 available)
+    $response = $this->withHeaders($this->user2Headers)
+        ->postJson('/api/v1/bookings', [
+            'trip_id' => $trip->id,
+            'seats_reserved' => 3,
+        ]);
+
+    $response->assertStatus(422)
+        ->assertJson([
+            'success' => false,
+            'message' => 'Trip is full. Not enough seats available.',
+        ]);
+});
+
+test('booking update fails when trip becomes full', function () {
+    // Create a trip with 2 seats available
+    $trip = \App\Models\Trip::factory()->create([
+        'user_id' => $this->user1->id,
+        'total_seats' => 3,
+        'available_seats' => 2,
+    ]);
+
+    // User2 books 1 seat
+    $booking = Booking::factory()->create([
+        'user_id' => $this->user2->id,
+        'trip_id' => $trip->id,
+        'seats_reserved' => 1,
+        'status' => 'confirmed',
+    ]);
+
+    // Update trip available seats to reflect the booking
+    $trip->update(['available_seats' => 1]);
+
+    // User3 books the remaining 1 seat
+    Booking::factory()->create([
+        'user_id' => $this->user3->id,
+        'trip_id' => $trip->id,
+        'seats_reserved' => 1,
+        'status' => 'confirmed',
+    ]);
+
+    // Update trip available seats to 0 (trip is now full)
+    $trip->update(['available_seats' => 0]);
+
+    // User2 tries to increase their booking to 2 seats (should fail - trip is full)
+    $response = $this->withHeaders($this->user2Headers)
+        ->putJson("/api/v1/bookings/{$booking->id}", [
+            'seats_reserved' => 2
+        ]);
+
+    $response->assertStatus(422)
+        ->assertJson([
+            'success' => false,
+            'message' => 'Trip is full. Not enough seats available for this update.',
+        ]);
+});

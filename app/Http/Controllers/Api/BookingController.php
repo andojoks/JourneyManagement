@@ -65,28 +65,41 @@ class BookingController extends Controller
             ], 422);
         }
 
-        // Business rule: Check if enough seats are available
-        if (!$trip->hasAvailableSeats($request->seats_reserved)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Not enough seats available.'
-            ], 422);
-        }
-
-        // Business rule: Check if user already has a booking for this trip
-        $existingBooking = Booking::where('user_id', $user->id)
-            ->where('trip_id', $trip->id)
-            ->first();
-
-        if ($existingBooking) {
-            return response()->json([
-                'success' => false,
-                'message' => 'You already have a booking for this trip.'
-            ], 422);
-        }
-
         try {
             DB::beginTransaction();
+
+            // Lock the trip row to prevent race conditions
+            $trip = Trip::where('id', $trip->id)->lockForUpdate()->first();
+            
+            if (!$trip) {
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Trip not found.'
+                ], 404);
+            }
+
+            // Business rule: Check if trip is full (inside transaction with lock)
+            if ($trip->available_seats < $request->seats_reserved) {
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Trip is full. Not enough seats available.'
+                ], 422);
+            }
+
+            // Business rule: Check if user already has a booking for this trip (inside transaction)
+            $existingBooking = Booking::where('user_id', $user->id)
+                ->where('trip_id', $trip->id)
+                ->first();
+
+            if ($existingBooking) {
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You already have a booking for this trip.'
+                ], 422);
+            }
 
             // Create the booking
             $booking = $user->bookings()->create([
@@ -96,7 +109,7 @@ class BookingController extends Controller
                 'status' => 'confirmed',
             ]);
 
-            // Update available seats
+            // Update available seats (atomic operation)
             $trip->decrement('available_seats', $request->seats_reserved);
 
             DB::commit();
@@ -167,28 +180,43 @@ class BookingController extends Controller
         try {
             DB::beginTransaction();
 
-            $trip = $booking->trip;
+            // Lock the trip row to prevent race conditions
+            $trip = Trip::where('id', $booking->trip_id)->lockForUpdate()->first();
+            
+            if (!$trip) {
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Trip not found.'
+                ], 404);
+            }
+
             $originalSeats = $booking->seats_reserved;
             $newSeats = $request->input('seats_reserved', $originalSeats);
             $newStatus = $request->input('status', $booking->status);
 
-            // If updating seats, check availability
+            // If updating seats, check availability with proper locking
             if ($newSeats !== $originalSeats) {
-                // Calculate current total reserved seats (excluding this booking)
-                $currentReservedSeats = $trip->confirmedBookings()
-                    ->where('id', '!=', $booking->id)
-                    ->sum('seats_reserved');
-
-                // Check if new seats would exceed total capacity
-                if (($currentReservedSeats + $newSeats) > $trip->total_seats) {
+                // Check if new seats would exceed total capacity (using locked trip data)
+                if ($newSeats > $trip->total_seats) {
+                    DB::rollBack();
                     return response()->json([
                         'success' => false,
-                        'message' => 'Not enough seats available. Requested seats would exceed trip capacity.'
+                        'message' => 'Requested seats exceed trip total capacity.'
+                    ], 422);
+                }
+
+                // Check if there are enough available seats for the increase
+                $seatDifference = $newSeats - $originalSeats;
+                if ($seatDifference > 0 && $trip->available_seats < $seatDifference) {
+                    DB::rollBack();
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Trip is full. Not enough seats available for this update.'
                     ], 422);
                 }
 
                 // Update available seats based on the difference
-                $seatDifference = $newSeats - $originalSeats;
                 $trip->increment('available_seats', -$seatDifference);
             }
 
@@ -261,13 +289,21 @@ class BookingController extends Controller
         try {
             DB::beginTransaction();
 
-            // Get the trip to update available seats
-            $trip = $booking->trip;
+            // Lock the trip row to prevent race conditions
+            $trip = Trip::where('id', $booking->trip_id)->lockForUpdate()->first();
+            
+            if (!$trip) {
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Trip not found.'
+                ], 404);
+            }
 
             // Update booking status to cancelled
             $booking->update(['status' => 'cancelled']);
 
-            // Restore available seats
+            // Restore available seats (atomic operation)
             $trip->increment('available_seats', $booking->seats_reserved);
 
             DB::commit();
