@@ -338,11 +338,11 @@ This project is open-sourced software licensed under the [MIT license](https://o
 
 For support and questions:
 
-- **Email**: support@journeymanager.com
+- **Email**: andojoks@gmail.com
 - **Documentation**: Check the Swagger documentation at `/swagger.json`
 - **Issues**: Create an issue in the repository
 
-## 🎯 Roadmap
+## 🎯 Future Work
 
 - [ ] Email verification for user registration
 - [ ] Password reset functionality
