@@ -1,0 +1,136 @@
+services:
+  
+  app-backend:
+    image: journey-manager-api-backend-image
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: journey-manager-api-backend
+    working_dir: /var/www
+    volumes:
+      - ./backend:/var/www:cached
+      - /var/www/vendor  # anonymous volume hides the host's vendor
+    depends_on:
+      - redis
+    environment:
+      - CACHE_STORE=redis
+      - SESSION_DRIVER=redis
+      - QUEUE_CONNECTION=redis
+      - REDIS_CLIENT=phpredis
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=yourpassword
+
+      - DB_CONNECTION=pgsql
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_DATABASE=journey-manager
+      - DB_USERNAME=journey-manager
+      - DB_PASSWORD=journey-manager  
+    ports:
+      - "9000:9000" # PHP-FPM port
+    entrypoint: ["/entrypoint.sh"]
+    networks:
+      - journey-manager-network
+  
+  queue-worker:
+    image: journey-manager-api-backend-image
+    container_name: journey-manager-api-backend-queue-worker
+    working_dir: /var/www
+    volumes:
+      - ./backend:/var/www:cached
+      - /var/www/vendor
+    depends_on:
+      - app-backend
+      - redis
+    environment:
+      - CACHE_STORE=redis
+      - SESSION_DRIVER=redis
+      - QUEUE_CONNECTION=redis
+      - REDIS_CLIENT=phpredis
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=yourpassword
+    entrypoint: []  # Override the default entrypoint
+    command: >
+      sh -c "
+      echo '🔄 Starting queue worker...' &&
+      php artisan queue:work redis --sleep=3 --tries=3 --max-time=3600 --memory=512
+      "
+    restart: unless-stopped
+    networks:
+      - journey-manager-network
+
+
+  redis:
+    image: journey-manager-redis-image
+    build:
+      context: .
+      dockerfile: Dockerfile.redis
+    container_name: journey-manager-api-backend-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - journey-manager-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+
+  webserver:
+    image: journey-manager-nginx-image
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
+    container_name: journey-manager-api-backend-webserver
+    depends_on:
+      - app-backend
+    ports:
+      - 8000:80
+    volumes:
+      - ./backend:/var/www
+    networks:
+      - journey-manager-network
+
+  db:
+    image: journey-manager-postgres-image
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
+    container_name: journey-manager-api-backend-db
+    restart: always
+    environment:
+      - POSTGRES_DB=journey-manager
+      - POSTGRES_USER=journey-manager
+      - POSTGRES_PASSWORD=journey-manager
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    ports:
+      - 5432:5432
+    networks:
+      - journey-manager-network
+
+  pgadmin:
+    image: journey-manager-pgadmin-image
+    build:
+      context: .
+      dockerfile: Dockerfile.pgadmin
+    container_name: journey-manager-api-backend-pgadmin
+    restart: always
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@journey-manager.com
+      - PGADMIN_DEFAULT_PASSWORD=admin123
+    ports:
+      - 5050:80
+    networks:
+      - journey-manager-network
+
+networks:
+  journey-manager-network:
+    driver: bridge
+
+volumes:
+  db-data:
+  redis-data:

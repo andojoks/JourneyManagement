@@ -1,6 +1,6 @@
 # 🚀 Journey Manager API
 
-A comprehensive REST API built with Laravel 12 for managing users, trips, and carpooling bookings with JWT authentication, featuring full CRUD operations, pagination, date filtering, and seat reservation capabilities.
+A comprehensive REST API built with Laravel 12 for managing users, trips, and carpooling bookings with JWT authentication, featuring advanced queue management, route optimization, dynamic pricing, and priority-based booking system.
 
 ## 📋 Table of Contents
 
@@ -9,10 +9,15 @@ A comprehensive REST API built with Laravel 12 for managing users, trips, and ca
 - [Installation](#-installation)
 - [Configuration](#-configuration)
 - [API Documentation](#-api-documentation)
-- [Usage Examples](#-usage-examples)
+- [Booking System Flow](#-booking-system-flow)
+- [Queue Management](#-queue-management)
+- [Advanced Features](#-advanced-features)
+- [Commands & Scheduling](#-commands--scheduling)
 - [Database Schema](#-database-schema)
 - [Security](#-security)
 - [Testing](#-testing)
+- [Project Structure](#-project-structure)
+- [Deployment](#-deployment)
 - [Contributing](#-contributing)
 - [License](#-license)
 
@@ -21,18 +26,17 @@ A comprehensive REST API built with Laravel 12 for managing users, trips, and ca
 ### Core Functionality
 - **User Management**: Registration, authentication, and profile management
 - **Trip Management**: Complete CRUD operations for trip tracking with seat capacity
-- **Carpooling Bookings**: Seat reservation system for available trips
+- **Priority Booking Queue**: Advanced queue system with priority scoring
 - **JWT Authentication**: Secure token-based authentication system
-- **Smart Authorization**: Users can view all trips but only modify their own; booking access control
+- **Smart Authorization**: Users can view all trips but only modify their own
 
 ### Advanced Features
-- **Pagination**: Built-in pagination for efficient data retrieval
-- **Date Filtering**: Search trips by date range and location
-- **Seat Management**: Track total and available seats for each trip
-- **Booking System**: Reserve and cancel seats with automatic seat updates
-- **Input Validation**: Comprehensive validation for all endpoints
-- **Error Handling**: Detailed error responses with proper HTTP status codes
-- **API Documentation**: Complete Swagger/OpenAPI 3.0 documentation
+- **Route Optimization**: Dijkstra's algorithm for optimal route finding
+- **Dynamic Pricing**: Surge pricing based on demand, time, and events
+- **Priority Queue System**: Fair booking access with priority scoring
+- **Transaction Safety**: Database locking prevents overbooking
+- **Automatic Processing**: Background jobs for queue management
+- **Real-time Processing**: Immediate booking when seats available
 
 ### Technical Features
 - **Laravel 12**: Built on the latest Laravel framework
@@ -40,6 +44,7 @@ A comprehensive REST API built with Laravel 12 for managing users, trips, and ca
 - **JWT Tokens**: Secure authentication with token refresh
 - **RESTful Design**: Following REST API best practices
 - **Middleware Protection**: Custom JWT middleware for route protection
+- **Comprehensive Testing**: Feature and unit tests with Pest framework
 
 ## 🔧 Requirements
 
@@ -82,6 +87,9 @@ php artisan jwt:secret
 # Run migrations
 php artisan migrate
 
+# Seed waypoints and route data
+php artisan db:seed --class=WaypointSeeder
+
 # (Optional) Seed database with sample data
 php artisan db:seed
 ```
@@ -98,7 +106,7 @@ The API will be available at `http://localhost:8000/api/v1`
 
 ### Environment Variables
 
-Update your `.env` file with the following JWT configuration:
+Update your `.env` file with the following configuration:
 
 ```env
 # JWT Configuration
@@ -110,9 +118,14 @@ JWT_LEEWAY=0
 JWT_BLACKLIST_ENABLED=true
 JWT_BLACKLIST_GRACE_PERIOD=0
 
-# Database Configuration [Developement] (SQLite)
+# Database Configuration [Development] (SQLite)
 DB_CONNECTION=sqlite
 DB_DATABASE=database/database.sqlite
+
+# Queue Processing Configuration
+QUEUE_PROCESSING_LIMIT=50
+QUEUE_CLEANUP_DAYS=7
+QUEUE_PROCESSING_INTERVAL=5
 ```
 
 ### JWT Configuration
@@ -144,27 +157,251 @@ The complete API documentation is available in Swagger/OpenAPI 3.0 format:
 #### Trip Management Endpoints
 - `GET /api/v1/trips` - List all trips (with pagination & filtering)
 - `POST /api/v1/trips` - Create a new trip with seat capacity
-- `GET /api/v1/trips/{id}` - Get specific trip with conditional booking visibility
+- `GET /api/v1/trips/{id}` - Get specific trip details
 - `PUT /api/v1/trips/{id}` - Update trip (including seat capacity)
 - `DELETE /api/v1/trips/{id}` - Delete trip
 - `GET /api/v1/trips/available` - List trips with available seats
 
 #### Booking Management Endpoints
-- `GET /api/v1/bookings` - List user's bookings
-- `POST /api/v1/bookings` - Create a new booking (reserve seats)
+- `GET /api/v1/bookings` - List user's bookings (with trip filtering)
+- `POST /api/v1/bookings` - Create a new booking (priority queue system)
 - `GET /api/v1/bookings/{id}` - Get specific booking
+- `PUT /api/v1/bookings/{id}` - Update booking (seats/status)
 - `DELETE /api/v1/bookings/{id}` - Cancel booking (restore seats)
+
+#### Route Optimization Endpoints
+- `GET /api/v1/routes/search` - Search waypoints by name/city
+- `GET /api/v1/routes/find` - Find optimal route between waypoints
+- `GET /api/v1/routes/cities` - Get route between cities by name
+- `POST /api/v1/routes/pricing` - Calculate dynamic pricing for trip
+- `POST /api/v1/routes/pricing/bulk` - Calculate pricing for multiple trips
+
+#### Queue Management Endpoints
+- `GET /api/v1/queue/status` - Get queue status for specific trip
+- `GET /api/v1/queue/positions` - Get user's queue positions
+- `DELETE /api/v1/queue/cancel` - Cancel queued booking request
 
 ### Base URL
 ```
 http://localhost:8000/api/v1
 ```
 
-## 💡 Usage Examples
+## 🔄 Booking System Flow
 
-### 1. User Registration
+### Priority Queue System
+
+The booking system uses a sophisticated priority queue to ensure fair access to limited seats:
+
+#### 1. Booking Request Flow
+
+```
+User Request → Validation → Add to Queue → Try Immediate Processing → Response
+```
+
+#### 2. Priority Scoring Algorithm
+
+The system calculates priority scores based on multiple factors:
+
+- **User Loyalty**: Based on previous bookings (up to 50 points)
+- **Early Booking**: Advance booking bonuses (10-30 points)
+- **Trip Creator**: High priority for trip creators (100 points)
+- **Seat Quantity**: Preference for single seats (+5 points)
+- **Premium Users**: Future subscription bonuses
+
+#### 3. Processing Layers
+
+**Layer 1: Queue Addition (Real-time)**
+- When user makes booking request
+- All requests are added to priority queue
+- Returns 202 Accepted with queue information
+
+**Layer 2: Background Jobs (Automated)**
+- Scheduled every 5 minutes
+- Processes queues when seats become available
+- Handles cancellations and seat releases
+- Creates actual bookings from queue items
+
+**Layer 3: Manual Triggers (On-demand)**
+- Trip creators can trigger immediate processing
+- For debugging and monitoring
+- Emergency processing when needed
+
+#### 4. Response Types
+
+**⏳ Queued Booking Request (202 Accepted):**
+```json
+{
+  "success": true,
+  "message": "Booking request added to queue",
+  "data": {
+    "queue_info": {
+      "queue_id": 790,
+      "priority_score": 30,
+      "estimated_position": 3,
+      "status": "pending",
+      "trip_info": {
+        "trip_id": 123,
+        "origin": "Paris",
+        "destination": "Lyon",
+        "start_time": "2024-01-15T08:00:00Z",
+        "available_seats": 2,
+        "total_seats": 4
+      }
+    }
+  }
+}
+```
+
+## 🎯 Queue Management
+
+### Queue States
+
+- **pending**: Waiting to be processed
+- **processing**: Currently being processed
+- **completed**: Successfully processed
+- **failed**: Processing failed with reason
+
+### Queue Processing Commands
+
+#### Manual Processing
+```bash
+# Process queue for specific trip
+php artisan queue:process-bookings --trip-id=123
+
+# Process all queues
+php artisan queue:process-bookings
+
+# Clean up old queue items
+php artisan queue:process-bookings --cleanup
+```
+
+#### Scheduled Processing
+```bash
+# Process queues automatically (every 5 minutes)
+php artisan queue:process-scheduled --limit=50
+
+# Check scheduled tasks
+php artisan schedule:list
+```
+
+### Queue Monitoring
 
 ```bash
+# View queue status for trip
+curl -X GET "http://localhost:8000/api/v1/queue/status?trip_id=123" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+
+# Get user's queue positions
+curl -X GET "http://localhost:8000/api/v1/queue/positions" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+## 🚀 Advanced Features
+
+### Route Optimization
+
+The system implements Dijkstra's algorithm for finding optimal routes:
+
+```bash
+# Find route between waypoints
+curl -X GET "http://localhost:8000/api/v1/routes/find?from=Paris&to=Lyon" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+
+# Get route between cities
+curl -X GET "http://localhost:8000/api/v1/routes/cities?from_city=Paris&to_city=Marseille" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+### Dynamic Pricing
+
+Surge pricing based on multiple factors:
+
+- **Demand Ratio**: Based on occupancy rate (up to 50% surge)
+- **Time-based**: Rush hours (+20%), weekends (+15%), late night (+10%)
+- **Distance-based**: Longer trips get higher multipliers
+- **Event-based**: Major holidays (+30%)
+- **Weather-based**: Placeholder for future weather API integration
+
+```bash
+# Calculate pricing for trip
+curl -X POST "http://localhost:8000/api/v1/routes/pricing" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{"trip_id": 123}'
+```
+
+## 🛠️ Commands & Scheduling
+
+### Available Commands
+
+#### Queue Management
+```bash
+# Process booking queues
+php artisan queue:process-bookings [--trip-id=123] [--cleanup]
+
+# Process queues automatically
+php artisan queue:process-scheduled [--limit=50]
+
+# List scheduled tasks
+php artisan schedule:list
+```
+
+#### Database Management
+```bash
+# Run migrations
+php artisan migrate
+
+# Seed waypoints
+php artisan db:seed --class=WaypointSeeder
+
+# Refresh database
+php artisan migrate:refresh --seed
+```
+
+#### Development
+```bash
+# Generate JWT secret
+php artisan jwt:secret
+
+# Clear caches
+php artisan cache:clear
+php artisan config:clear
+php artisan route:clear
+
+# Generate application key
+php artisan key:generate
+```
+
+### Scheduled Tasks
+
+The system includes automatic scheduling:
+
+```php
+// Every 5 minutes - Process booking queues
+Schedule::command('queue:process-scheduled --limit=50')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// Daily at 2 AM - Clean up old queue items
+Schedule::command('queue:process-bookings --cleanup')
+    ->dailyAt('02:00')
+    ->withoutOverlapping();
+```
+
+### Enable Scheduler
+
+Add to your crontab:
+```bash
+* * * * * cd /path-to-your-project && php artisan schedule:run >> /dev/null 2>&1
+```
+
+## 💡 Usage Examples
+
+### 1. User Registration & Login
+
+```bash
+# Register
 curl -X POST http://localhost:8000/api/v1/auth/register \
   -H "Content-Type: application/json" \
   -d '{
@@ -174,12 +411,9 @@ curl -X POST http://localhost:8000/api/v1/auth/register \
     "password": "password123",
     "phone_number": "+1234567890"
   }'
-```
 
-### 2. User Login
-
-```bash
-curl -X POST http://localhost:8000/api/auth/login \
+# Login
+curl -X POST http://localhost:8000/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{
     "email": "john@example.com",
@@ -187,7 +421,7 @@ curl -X POST http://localhost:8000/api/auth/login \
   }'
 ```
 
-### 3. Create a Trip with Seat Capacity
+### 2. Create Trip with Seat Capacity
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/trips \
@@ -204,14 +438,7 @@ curl -X POST http://localhost:8000/api/v1/trips \
   }'
 ```
 
-### 4. List Available Trips for Booking
-
-```bash
-curl -X GET "http://localhost:8000/api/v1/trips/available?page=1&limit=10&origin=Paris&destination=Lyon" \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN"
-```
-
-### 5. Create a Booking (Reserve Seats)
+### 3. Create Booking Request (Priority Queue)
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/bookings \
@@ -223,61 +450,80 @@ curl -X POST http://localhost:8000/api/v1/bookings \
   }'
 ```
 
-### 6. List User's Bookings
+**Response (202 Accepted):**
+```json
+{
+  "success": true,
+  "message": "Booking request added to queue",
+  "data": {
+    "queue_info": {
+      "queue_id": 123,
+      "priority_score": 45,
+      "estimated_position": 1,
+      "status": "pending",
+      "trip_info": {
+        "trip_id": 1,
+        "origin": "Paris",
+        "destination": "Lyon",
+        "start_time": "2024-01-15T08:00:00Z",
+        "available_seats": 2,
+        "total_seats": 4
+      }
+    }
+  }
+}
+```
+
+### 4. Find Optimal Route
 
 ```bash
-curl -X GET "http://localhost:8000/api/v1/bookings?page=1&limit=10" \
+curl -X GET "http://localhost:8000/api/v1/routes/find?from=Paris&to=Lyon" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
-### 7. Cancel a Booking
+### 5. Calculate Dynamic Pricing
 
 ```bash
-curl -X DELETE http://localhost:8000/api/v1/bookings/1 \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN"
-```
-
-### 8. Update Trip with New Seat Capacity
-
-```bash
-curl -X PUT http://localhost:8000/api/v1/trips/1 \
+curl -X POST "http://localhost:8000/api/v1/routes/pricing" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  -d '{
-    "origin": "Paris",
-    "destination": "Marseille",
-    "start_time": "2024-01-15T08:00:00Z",
-    "end_time": "2024-01-15T12:00:00Z",
-    "distance": 770,
-    "trip_type": "business",
-    "total_seats": 6,
-    "status": "in-progress"
-  }'
+  -d '{"trip_id": 1}'
 ```
 
-## 🚗 Carpooling Booking System
+### 6. Check Queue Status
 
-### Business Rules
+```bash
+curl -X GET "http://localhost:8000/api/v1/queue/status?trip_id=1" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
 
-The booking system implements the following business logic:
+### 7. Get User's Queue Positions
 
-#### Trip Visibility
-- **All Users**: Can view all trips (both their own and others')
-- **Trip Creators**: Can see all bookings for their trips
-- **Other Users**: Can only see their own booking for a specific trip
+```bash
+curl -X GET "http://localhost:8000/api/v1/queue/positions" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
 
-#### Booking Rules
-- **Self-Booking Prevention**: Users cannot book seats on their own trips
-- **Seat Availability**: Users cannot book more seats than available
-- **No Double-Booking**: Users cannot book the same trip multiple times
-- **Booking Access**: Users can view/cancel bookings they made OR trips they created
+### 8. Cancel Queued Request
 
-#### Seat Management
-- **Automatic Updates**: Available seats are automatically updated when bookings are created/cancelled
-- **Capacity Validation**: Trip creators cannot reduce total seats below currently reserved seats
-- **Real-time Tracking**: Available seats reflect current booking status
+```bash
+curl -X DELETE "http://localhost:8000/api/v1/queue/cancel" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{"queue_id": 123}'
+```
 
-### Database Schema
+## 🗄️ Database Schema
+
+### Core Tables
+
+#### Users Table
+```sql
+- id (Primary Key)
+- first_name, last_name, email, phone_number
+- password (hashed)
+- email_verified_at, created_at, updated_at
+```
 
 #### Trips Table (Enhanced)
 ```sql
@@ -285,12 +531,15 @@ The booking system implements the following business logic:
 - user_id (Foreign Key to users)
 - origin, destination, start_time, end_time
 - distance, trip_type, status
-- total_seats (NEW: Maximum seats available)
-- available_seats (NEW: Currently available seats)
+- total_seats (Maximum seats available)
+- available_seats (Currently available seats)
+- base_price, surge_multiplier, final_price
+- route_waypoints (JSON - optimal route waypoints)
+- priority_score (For queueing)
 - created_at, updated_at
 ```
 
-#### Bookings Table (NEW)
+#### Bookings Table
 ```sql
 - id (Primary Key)
 - user_id (Foreign Key to users)
@@ -302,23 +551,59 @@ The booking system implements the following business logic:
 - UNIQUE constraint on (user_id, trip_id)
 ```
 
+#### Booking Queue Table
+```sql
+- id (Primary Key)
+- user_id (Foreign Key to users)
+- trip_id (Foreign Key to trips)
+- seats_requested (Number of seats requested)
+- priority_score (Calculated priority score)
+- status (pending/processing/completed/failed)
+- queued_at, processed_at
+- failure_reason (If processing failed)
+- created_at, updated_at
+```
+
+#### Waypoints Table
+```sql
+- id (Primary Key)
+- name (Waypoint name)
+- latitude, longitude (Coordinates)
+- created_at, updated_at
+```
+
+#### Route Segments Table
+```sql
+- id (Primary Key)
+- from_waypoint_id (Foreign Key to waypoints)
+- to_waypoint_id (Foreign Key to waypoints)
+- distance_km (Distance in kilometers)
+- time_minutes (Estimated time in minutes)
+- base_price (Base price for segment)
+- is_active (Whether segment is active)
+- created_at, updated_at
+- UNIQUE constraint on (from_waypoint_id, to_waypoint_id)
+```
+
 ## 🔒 Security
 
-### Authentication
+### Authentication & Authorization
 - **JWT Tokens**: Secure token-based authentication
 - **Password Hashing**: Laravel's built-in password hashing
 - **Token Expiration**: Configurable token lifetime
 - **Token Refresh**: Automatic token refresh mechanism
-
-### Authorization
-- **Trip Access**: Users can view all trips but only modify their own
-- **Booking Access**: Users can view/cancel bookings they made or trips they created
-- **Business Rules**: Users cannot book their own trips or exceed available seats
 - **Route Protection**: JWT middleware protects all endpoints
+
+### Business Rules Enforcement
+- **Self-Booking Prevention**: Users cannot book their own trips
+- **Seat Availability**: Users cannot book more seats than available
+- **No Double-Booking**: Users cannot book the same trip multiple times
+- **Queue Management**: Users cannot have multiple pending requests
+- **Transaction Safety**: Database locking prevents overbooking
+
+### Data Protection
 - **Input Validation**: Comprehensive validation on all inputs
 - **SQL Injection Protection**: Laravel's Eloquent ORM protection
-
-### Security Headers
 - **CORS**: Configurable Cross-Origin Resource Sharing
 - **Rate Limiting**: Built-in rate limiting for API endpoints
 - **CSRF Protection**: Laravel's CSRF protection for web routes
@@ -337,30 +622,59 @@ php artisan test --testsuite=Unit
 
 # Run with coverage
 php artisan test --coverage
+
+# Run specific test file
+php artisan test tests/Feature/BookingTest.php
 ```
 
 ### Test Structure
-- **Feature Tests**: API endpoint testing
+
+- **Feature Tests**: API endpoint testing with queue integration
 - **Unit Tests**: Individual component testing
 - **Pest Framework**: Modern testing framework
+- **Database Testing**: RefreshDatabase trait for clean state
+
+### Test Coverage
+
+The test suite covers:
+- ✅ User authentication and authorization
+- ✅ Trip CRUD operations with seat management
+- ✅ Booking system with priority queue
+- ✅ Queue processing and priority scoring
+- ✅ Route optimization and dynamic pricing
+- ✅ Error handling and edge cases
+- ✅ Transaction safety and race conditions
 
 ## 📁 Project Structure
 
 ```
 journey-manager/
 ├── app/
+│   ├── Console/
+│   │   └── Commands/
+│   │       ├── ProcessBookingQueue.php
+│   │       └── ProcessBookingQueueScheduled.php
 │   ├── Http/
 │   │   ├── Controllers/
 │   │   │   └── Api/
 │   │   │       ├── AuthController.php
 │   │   │       ├── TripController.php
-│   │   │       └── BookingController.php
+│   │   │       ├── BookingController.php
+│   │   │       ├── RouteController.php
+│   │   │       └── BookingQueueController.php
 │   │   └── Middleware/
 │   │       └── JWTMiddleware.php
 │   ├── Models/
 │   │   ├── User.php
 │   │   ├── Trip.php
-│   │   └── Booking.php
+│   │   ├── Booking.php
+│   │   ├── BookingQueue.php
+│   │   ├── Waypoint.php
+│   │   └── RouteSegment.php
+│   ├── Services/
+│   │   ├── BookingQueueService.php
+│   │   ├── RouteOptimizationService.php
+│   │   └── DynamicPricingService.php
 │   └── Providers/
 │       └── AppServiceProvider.php
 ├── config/
@@ -371,16 +685,25 @@ journey-manager/
 │   │   ├── create_users_table.php
 │   │   ├── create_trips_table.php
 │   │   ├── add_seat_capacity_to_trips_table.php
-│   │   └── create_bookings_table.php
+│   │   ├── create_bookings_table.php
+│   │   ├── create_waypoints_table.php
+│   │   ├── create_route_segments_table.php
+│   │   ├── add_pricing_to_trips_table.php
+│   │   └── create_booking_queue_table.php
 │   ├── factories/
 │   │   ├── UserFactory.php
 │   │   ├── TripFactory.php
-│   │   └── BookingFactory.php
+│   │   ├── BookingFactory.php
+│   │   ├── WaypointFactory.php
+│   │   └── RouteSegmentFactory.php
+│   ├── seeders/
+│   │   └── WaypointSeeder.php
 │   └── database.sqlite
 ├── public/
 │   └── swagger.json
 ├── routes/
-│   └── api.php
+│   ├── api.php
+│   └── console.php
 ├── tests/
 │   └── Feature/
 │       ├── AuthTest.php
@@ -405,6 +728,10 @@ journey-manager/
    DB_DATABASE=your-db-name
    DB_USERNAME=your-db-user
    DB_PASSWORD=your-db-password
+   
+   # Queue configuration
+   QUEUE_PROCESSING_LIMIT=100
+   QUEUE_CLEANUP_DAYS=7
    ```
 
 2. **Optimize Application**
@@ -412,12 +739,60 @@ journey-manager/
    php artisan config:cache
    php artisan route:cache
    php artisan view:cache
+   php artisan optimize
    ```
 
-3. **Set Permissions**
+3. **Set Up Scheduler**
+   ```bash
+   # Add to crontab
+   * * * * * cd /path-to-your-project && php artisan schedule:run >> /dev/null 2>&1
+   ```
+
+4. **Set Permissions**
    ```bash
    chmod -R 755 storage bootstrap/cache
    ```
+
+### Docker Deployment
+
+```dockerfile
+FROM php:8.2-fpm
+
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    libpng-dev \
+    libonig-dev \
+    libxml2-dev \
+    zip \
+    unzip
+
+# Install PHP extensions
+RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
+
+# Install Composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+# Set working directory
+WORKDIR /var/www
+
+# Copy application
+COPY . .
+
+# Install dependencies
+RUN composer install --no-dev --optimize-autoloader
+
+# Set permissions
+RUN chown -R www-data:www-data /var/www
+RUN chmod -R 755 /var/www/storage
+
+# Expose port
+EXPOSE 8000
+
+# Start application
+CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
+```
 
 ## 🤝 Contributing
 
@@ -433,6 +808,8 @@ journey-manager/
 - Write tests for new features
 - Update documentation for API changes
 - Use meaningful commit messages
+- Test queue processing thoroughly
+- Ensure transaction safety
 
 ## 📄 License
 
@@ -448,17 +825,19 @@ For support and questions:
 
 ## 🎯 Future Work
 
-- [ ] Email verification for user registration
-- [ ] Password reset functionality
-- [ ] Real-time trip tracking
+- [ ] Real-time notifications for queue updates
 - [ ] Mobile app integration
+- [ ] Payment integration for bookings
 - [ ] Advanced analytics and reporting
 - [ ] Multi-language support
-- [ ] API rate limiting improvements
-- [ ] Push notifications for booking updates
+- [ ] Weather API integration for pricing
+- [ ] Machine learning for demand prediction
 - [ ] Trip rating and review system
-- [ ] Payment integration for bookings
+- [ ] Social features and user connections
+- [ ] Advanced route optimization with traffic data
 
 ---
 
 **Built with ❤️ using Laravel 12**
+
+*Featuring advanced queue management, route optimization, and dynamic pricing*

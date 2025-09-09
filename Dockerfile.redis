@@ -1,0 +1,10 @@
+FROM redis:7-alpine
+
+# Create data directory
+RUN mkdir -p /data
+
+# Expose port 6379
+EXPOSE 6379
+
+# Start Redis with password protection
+CMD ["redis-server", "--requirepass", "yourpassword"] 

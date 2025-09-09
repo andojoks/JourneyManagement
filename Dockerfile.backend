@@ -1,0 +1,63 @@
+FROM php:8.2-fpm
+
+# Correctly load php.ini
+RUN cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
+
+# --------------------------------------------------------------------
+# PHP file upload and temp storage configuration
+# --------------------------------------------------------------------
+RUN set -eux; \
+  { \
+    echo "memory_limit=256M"; \
+    echo "post_max_size=32M"; \
+    echo "upload_max_filesize=32M"; \
+    echo "max_file_uploads=20"; \
+    echo "file_uploads=On"; \
+  } > "$PHP_INI_DIR/conf.d/uploads.ini"
+
+  # Install system dependencies
+RUN set -eux; \
+apt-get update; \
+apt-get install -y --no-install-recommends \
+  libpq-dev \
+  libzip-dev \
+  unzip \
+  curl \
+  pkg-config \
+docker-php-ext-configure pcntl --enable-pcntl; \
+
+# Install and enable Redis extension
+ARG PHPREDIS_VERSION=6.0.2
+RUN set -eux; \
+  pecl install "redis-${PHPREDIS_VERSION}"; \
+  docker-php-ext-enable redis
+
+# Install Composer
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+
+# Set global composer process timeout to 1200 seconds (20 minutes)
+ENV COMPOSER_PROCESS_TIMEOUT=1200
+
+WORKDIR /var/www
+
+# Copy files (excluding vendor thanks to .dockerignore) 
+COPY --chown=www-data:www-data ./backend .
+
+# Ensure directories exist and have correct permissions before Composer runs
+RUN set -eux; \
+  mkdir -p storage bootstrap/cache vendor; \
+  chown -R www-data:www-data storage bootstrap/cache vendor; \
+  chmod -R 775 storage bootstrap/cache || true
+
+# Install dependencies (after all files are available)
+RUN composer install
+
+# Copy and prepare entrypoint
+COPY --chown=www-data:www-data docker/entrypoint.sh /entrypoint.sh
+
+# Ensure entrypoint script is executable and has correct line endings
+RUN set -eux; sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
+
+# Use entrypoint for setup; default CMD to php-fpm
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["php-fpm"]

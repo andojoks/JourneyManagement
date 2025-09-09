@@ -1,0 +1,15 @@
+FROM postgres:14
+
+# Set environment variables
+ENV POSTGRES_DB=lms
+ENV POSTGRES_USER=lmsuser
+ENV POSTGRES_PASSWORD=lmspassword
+
+# Create necessary directories
+RUN mkdir -p /var/lib/postgresql/data
+
+# Expose port 5432
+EXPOSE 5432
+
+# Start PostgreSQL
+CMD ["postgres"] 

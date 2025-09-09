@@ -1,0 +1,4 @@
+/backend/vendor
+
+# Exclude storage linkage
+/backend/public/storage

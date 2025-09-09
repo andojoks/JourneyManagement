@@ -1,0 +1,16 @@
+FROM dpage/pgadmin4
+
+# Set environment variables
+ENV PGADMIN_DEFAULT_EMAIL=admin@lms.com
+ENV PGADMIN_DEFAULT_PASSWORD=admin123
+
+# Expose port 80
+EXPOSE 80
+
+# Start pgAdmin
+CMD ["pgadmin4"]
+
+
+
+
+
