@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Trip;
 use App\Models\Booking;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Cache;
 
 class DynamicPricingService
 {
@@ -13,16 +14,20 @@ class DynamicPricingService
      */
     public function calculateSurgePricing(Trip $trip): array
     {
-        $basePrice = $trip->base_price;
-        $surgeMultiplier = $this->calculateSurgeMultiplier($trip);
-        $finalPrice = $basePrice * $surgeMultiplier;
+        $cacheKey = "pricing:trip:{$trip->id}";
+        
+        return Cache::remember($cacheKey, 120, function () use ($trip) { // 2 minutes cache
+            $basePrice = $trip->base_price;
+            $surgeMultiplier = $this->calculateSurgeMultiplier($trip);
+            $finalPrice = $basePrice * $surgeMultiplier;
 
-        return [
-            'base_price' => $basePrice,
-            'surge_multiplier' => $surgeMultiplier,
-            'final_price' => round($finalPrice, 2),
-            'factors' => $this->getPricingFactors($trip),
-        ];
+            return [
+                'base_price' => $basePrice,
+                'surge_multiplier' => $surgeMultiplier,
+                'final_price' => round($finalPrice, 2),
+                'factors' => $this->getPricingFactors($trip),
+            ];
+        });
     }
 
     /**
@@ -195,17 +200,58 @@ class DynamicPricingService
     }
 
     /**
-     * Get pricing for multiple trips.
+     * Get pricing for multiple trips with caching.
      */
     public function getBulkPricing(array $tripIds): array
     {
-        $trips = Trip::whereIn('id', $tripIds)->get();
-        $pricing = [];
+        $cacheKey = 'bulk_pricing:' . md5(implode(',', $tripIds));
+        
+        return Cache::remember($cacheKey, 120, function () use ($tripIds) { // 2 minutes cache
+            $trips = Trip::whereIn('id', $tripIds)->get();
+            $pricing = [];
 
-        foreach ($trips as $trip) {
-            $pricing[$trip->id] = $this->calculateSurgePricing($trip);
+            foreach ($trips as $trip) {
+                $pricing[$trip->id] = $this->calculateSurgePricing($trip);
+            }
+
+            return $pricing;
+        });
+    }
+
+    /**
+     * Get cached pricing for a trip
+     */
+    public function getCachedPricing(int $tripId): ?array
+    {
+        $cacheKey = "pricing:trip:{$tripId}";
+        return Cache::get($cacheKey);
+    }
+
+    /**
+     * Invalidate pricing cache for a trip
+     */
+    public function invalidatePricingCache(int $tripId): void
+    {
+        $cacheKey = "pricing:trip:{$tripId}";
+        Cache::forget($cacheKey);
+        
+        // Also invalidate bulk pricing caches that might contain this trip
+        $this->invalidateBulkPricingCaches();
+    }
+
+    /**
+     * Invalidate all bulk pricing caches
+     */
+    private function invalidateBulkPricingCaches(): void
+    {
+        try {
+            $redis = Cache::getRedis();
+            $keys = $redis->keys('bulk_pricing:*');
+            if (!empty($keys)) {
+                $redis->del($keys);
+            }
+        } catch (\Exception $e) {
+            \Log::warning('Failed to invalidate bulk pricing caches', ['error' => $e->getMessage()]);
         }
-
-        return $pricing;
     }
 }

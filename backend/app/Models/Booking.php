@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Services\CacheService;
 
 class Booking extends Model
 {
@@ -70,5 +71,23 @@ class Booking extends Model
     public function scopeCancelled($query)
     {
         return $query->where('status', 'cancelled');
+    }
+
+    /**
+     * Model event handlers for cache invalidation
+     */
+    protected static function booted()
+    {
+        static::created(function ($booking) {
+            app(CacheService::class)->invalidateBookingCaches($booking);
+        });
+
+        static::updated(function ($booking) {
+            app(CacheService::class)->invalidateBookingCaches($booking);
+        });
+
+        static::deleted(function ($booking) {
+            app(CacheService::class)->invalidateBookingCaches($booking);
+        });
     }
 }

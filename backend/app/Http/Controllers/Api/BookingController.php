@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
+use App\Services\CacheService;
 
 class BookingController extends Controller
 {
@@ -26,16 +27,35 @@ class BookingController extends Controller
     {
         $user = auth()->user();
         
-        $query = $user->bookings()->with(['trip.user']);
-
-        // Filter by trip_id if provided
+        // Build filters for caching
+        $filters = [];
         if ($request->has('trip_id')) {
-            $query->where('trip_id', $request->trip_id);
+            $filters['trip_id'] = $request->trip_id;
+        }
+        if ($request->has('status')) {
+            $filters['status'] = $request->status;
         }
 
-        // Pagination
-        $perPage = $request->get('limit', 10);
-        $bookings = $query->orderBy('booking_time', 'desc')->paginate($perPage);
+        // Try to get cached user bookings first
+        $cacheService = app(CacheService::class);
+        $bookings = $cacheService->getCachedUserBookings($user->id, $filters);
+
+        // If no cached data or we need pagination, fall back to database query
+        if (!$bookings || $request->has('limit') || $request->has('page')) {
+            $query = $user->bookings()->with(['trip.user']);
+
+            // Apply filters
+            if (isset($filters['trip_id'])) {
+                $query->where('trip_id', $filters['trip_id']);
+            }
+            if (isset($filters['status'])) {
+                $query->where('status', $filters['status']);
+            }
+
+            // Pagination
+            $perPage = $request->get('limit', 10);
+            $bookings = $query->orderBy('booking_time', 'desc')->paginate($perPage);
+        }
 
         return response()->json([
             'success' => true,

@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
 use Carbon\Carbon;
+use App\Services\CacheService;
 
 class TripController extends Controller
 {
@@ -18,15 +19,43 @@ class TripController extends Controller
     {
         $user = auth()->user();
         
-        $query = Trip::with(['user', 'bookings' => function($q) use ($user) {
-            // For trip creators, show all bookings
-            // For other users, show only their own booking
-            $q->where(function($subQ) use ($user) {
-                $subQ->whereHas('trip', function($tripQ) use ($user) {
-                    $tripQ->where('user_id', $user->id);
-                })->orWhere('user_id', $user->id);
-            });
-        }]);
+        // Build filters for caching
+        $filters = [];
+        if ($request->has('start_date')) {
+            $filters['start_date'] = Carbon::parse($request->start_date)->startOfDay();
+        }
+        if ($request->has('end_date')) {
+            $filters['end_date'] = Carbon::parse($request->end_date)->endOfDay();
+        }
+        if ($request->has('status')) {
+            $filters['status'] = $request->status;
+        }
+
+        // Validate date range
+        if (isset($filters['start_date']) && isset($filters['end_date'])) {
+            if ($filters['end_date']->lt($filters['start_date'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'End date must be after start date.'
+                ], 422);
+            }
+        }
+
+        // Try to get cached data first
+        $cacheService = app(CacheService::class);
+        $trips = $cacheService->getCachedTrips($filters, $user->id);
+
+        // If no cached data or we need pagination, fall back to database query
+        if (!$trips || $request->has('limit') || $request->has('page')) {
+            $query = Trip::with(['user', 'bookings' => function($q) use ($user) {
+                // For trip creators, show all bookings
+                // For other users, show only their own booking
+                $q->where(function($subQ) use ($user) {
+                    $subQ->whereHas('trip', function($tripQ) use ($user) {
+                        $tripQ->where('user_id', $user->id);
+                    })->orWhere('user_id', $user->id);
+                });
+            }]);
 
         // Date filtering
         if ($request->has('start_date') && $request->has('end_date')) {
@@ -40,17 +69,18 @@ class TripController extends Controller
             }
             $query->where('start_time', '>=', $startDate)
                   ->where('end_time', '<=', $endDate);
-        } elseif ($request->has('start_date')) {
-            $startDate = Carbon::parse($request->start_date)->startOfDay();
-            $query->where('start_time', '>=', $startDate);
-        } elseif ($request->has('end_date')) {
-            $endDate = Carbon::parse($request->end_date)->endOfDay();
-            $query->where('end_time', '<=', $endDate);
-        }
+            } elseif ($request->has('start_date')) {
+                $startDate = Carbon::parse($request->start_date)->startOfDay();
+                $query->where('start_time', '>=', $startDate);
+            } elseif ($request->has('end_date')) {
+                $endDate = Carbon::parse($request->end_date)->endOfDay();
+                $query->where('end_time', '<=', $endDate);
+            }
 
-        // Pagination
-        $perPage = $request->get('limit', 10);
-        $trips = $query->orderBy('start_time', 'desc')->paginate($perPage);
+            // Pagination
+            $perPage = $request->get('limit', 10);
+            $trips = $query->orderBy('start_time', 'desc')->paginate($perPage);
+        }
 
         return response()->json([
             'success' => true,
@@ -110,8 +140,15 @@ class TripController extends Controller
      */
     public function show(Trip $trip): JsonResponse
     {
-        // Load only the trip creator information
-        $trip->load('user');
+        // Try to get cached trip data first
+        $cachedTrip = Trip::getCachedTrip($trip->id);
+        
+        if ($cachedTrip) {
+            $trip = $cachedTrip;
+        } else {
+            // Load only the trip creator information
+            $trip->load('user');
+        }
 
         return response()->json([
             'success' => true,
@@ -212,43 +249,59 @@ class TripController extends Controller
      */
     public function available(Request $request): JsonResponse
     {
-        $user = auth()->user();
-        
-        $query = Trip::with('user')
-            ->withAvailableSeats()
-            ->where('status', 'in-progress');
+        // Build filters for caching
+        $filters = [];
+        if ($request->has('start_date')) {
+            $filters['start_date'] = Carbon::parse($request->start_date)->startOfDay();
+        }
+        if ($request->has('end_date')) {
+            $filters['end_date'] = Carbon::parse($request->end_date)->endOfDay();
+        }
+        if ($request->has('origin')) {
+            $filters['origin'] = $request->origin;
+        }
+        if ($request->has('destination')) {
+            $filters['destination'] = $request->destination;
+        }
 
-        // Date filtering
-        if ($request->has('start_date') && $request->has('end_date')) {
-            $startDate = Carbon::parse($request->start_date)->startOfDay();
-            $endDate = Carbon::parse($request->end_date)->endOfDay();
-            if ($endDate->lt($startDate)) {
+        // Validate date range
+        if (isset($filters['start_date']) && isset($filters['end_date'])) {
+            if ($filters['end_date']->lt($filters['start_date'])) {
                 return response()->json([
                     'success' => false,
                     'message' => 'End date must be after start date.'
                 ], 422);
             }
-            $query->where('start_time', '>=', $startDate)
-                  ->where('end_time', '<=', $endDate);
-        } elseif ($request->has('start_date')) {
-            $startDate = Carbon::parse($request->start_date)->startOfDay();
-            $query->where('start_time', '>=', $startDate);
-        } elseif ($request->has('end_date')) {
-            $endDate = Carbon::parse($request->end_date)->endOfDay();
-            $query->where('end_time', '<=', $endDate);
         }
 
-        // Origin/Destination filtering
-        if ($request->has('origin')) {
-            $query->where('origin', 'like', '%' . $request->origin . '%');
-        }
-        if ($request->has('destination')) {
-            $query->where('destination', 'like', '%' . $request->destination . '%');
-        }
+        // Try to get cached available trips first
+        $cacheService = app(CacheService::class);
+        $trips = $cacheService->getCachedAvailableTrips($filters);
 
-        // Pagination
-        $perPage = $request->get('limit', 10);
-        $trips = $query->orderBy('start_time', 'asc')->paginate($perPage);
+        // If no cached data or we need pagination, fall back to database query
+        if (!$trips || $request->has('limit') || $request->has('page')) {
+            $query = Trip::with('user')
+                ->withAvailableSeats()
+                ->where('status', 'in-progress');
+
+            // Apply filters
+            if (isset($filters['start_date'])) {
+                $query->where('start_time', '>=', $filters['start_date']);
+            }
+            if (isset($filters['end_date'])) {
+                $query->where('end_time', '<=', $filters['end_date']);
+            }
+            if (isset($filters['origin'])) {
+                $query->where('origin', 'like', '%' . $filters['origin'] . '%');
+            }
+            if (isset($filters['destination'])) {
+                $query->where('destination', 'like', '%' . $filters['destination'] . '%');
+            }
+
+            // Pagination
+            $perPage = $request->get('limit', 10);
+            $trips = $query->orderBy('start_time', 'asc')->paginate($perPage);
+        }
 
         return response()->json([
             'success' => true,

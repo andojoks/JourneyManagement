@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Cache;
+use App\Services\CacheService;
 
 class Trip extends Model
 {
@@ -120,5 +122,72 @@ class Trip extends Model
     public function getTotalReservedSeats()
     {
         return $this->confirmedBookings()->sum('seats_reserved');
+    }
+
+    /**
+     * Get trips with caching for better performance
+     */
+    public static function getCachedTrips(array $filters = [], int $userId = null)
+    {
+        return app(CacheService::class)->getCachedTrips($filters, $userId);
+    }
+
+    /**
+     * Get available trips with caching
+     */
+    public static function getCachedAvailableTrips(array $filters = [])
+    {
+        return app(CacheService::class)->getCachedAvailableTrips($filters);
+    }
+
+    /**
+     * Get trip with caching
+     */
+    public static function getCachedTrip(int $tripId)
+    {
+        $cacheKey = "trip:{$tripId}";
+        
+        return Cache::remember($cacheKey, 300, function () use ($tripId) {
+            return static::with(['user', 'bookings.user'])->find($tripId);
+        });
+    }
+
+    /**
+     * Get trip bookings with caching
+     */
+    public function getCachedBookings()
+    {
+        $cacheKey = "trip:{$this->id}:bookings";
+        
+        return Cache::remember($cacheKey, 180, function () {
+            return $this->bookings()->with('user')->get();
+        });
+    }
+
+    /**
+     * Get trip pricing with caching
+     */
+    public function getCachedPricing()
+    {
+        return app(CacheService::class)->getCachedPricing($this->id);
+    }
+
+    /**
+     * Model event handlers for cache invalidation
+     */
+    protected static function booted()
+    {
+        static::updated(function ($trip) {
+            app(CacheService::class)->invalidateTripCaches($trip);
+        });
+
+        static::deleted(function ($trip) {
+            app(CacheService::class)->invalidateTripCaches($trip);
+        });
+
+        static::created(function ($trip) {
+            app(CacheService::class)->invalidatePatternCaches('trips:*');
+            app(CacheService::class)->invalidatePatternCaches('available_trips:*');
+        });
     }
 }

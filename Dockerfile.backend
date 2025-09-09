@@ -15,16 +15,18 @@ RUN set -eux; \
     echo "file_uploads=On"; \
   } > "$PHP_INI_DIR/conf.d/uploads.ini"
 
-  # Install system dependencies
+# Install system dependencies
 RUN set -eux; \
-apt-get update; \
-apt-get install -y --no-install-recommends \
-  libpq-dev \
-  libzip-dev \
-  unzip \
-  curl \
-  pkg-config \
-docker-php-ext-configure pcntl --enable-pcntl; \
+  apt-get update; \
+  apt-get install -y --no-install-recommends \
+    libpq-dev \
+    libzip-dev \
+    unzip \
+    curl \
+    pkg-config; \
+  docker-php-ext-configure pcntl --enable-pcntl; \
+  docker-php-ext-install pdo pdo_pgsql zip pcntl
+
 
 # Install and enable Redis extension
 ARG PHPREDIS_VERSION=6.0.2

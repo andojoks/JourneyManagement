@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Services\CacheService;
 
 class Waypoint extends Model
 {
@@ -70,5 +71,23 @@ class Waypoint extends Model
         return static::where('name', 'like', "%{$query}%")
             ->orWhere('city', 'like', "%{$query}%")
             ->first();
+    }
+
+    /**
+     * Model event handlers for cache invalidation
+     */
+    protected static function booted()
+    {
+        static::created(function ($waypoint) {
+            app(CacheService::class)->invalidateWaypointCaches($waypoint);
+        });
+
+        static::updated(function ($waypoint) {
+            app(CacheService::class)->invalidateWaypointCaches($waypoint);
+        });
+
+        static::deleted(function ($waypoint) {
+            app(CacheService::class)->invalidateWaypointCaches($waypoint);
+        });
     }
 }
